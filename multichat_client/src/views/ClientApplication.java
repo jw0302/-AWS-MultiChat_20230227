@@ -8,6 +8,8 @@ import javax.swing.border.EmptyBorder;
 
 import com.google.gson.Gson;
 
+import dto.request.RequestDto;
+
 import java.awt.CardLayout;
 import javax.swing.JTextField;
 import javax.swing.JButton;
@@ -18,10 +20,13 @@ import javax.swing.JTextArea;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.io.IOException;
+import java.io.OutputStream;
 import java.io.PrintWriter;
 import java.net.ConnectException;
 import java.net.Socket;
 import java.net.UnknownHostException;
+import java.awt.event.KeyAdapter;
+import java.awt.event.KeyEvent;
 
 public class ClientApplication extends JFrame {
 
@@ -58,6 +63,9 @@ public class ClientApplication extends JFrame {
 		gson = new Gson();
 		try {
 			socket = new Socket("127.0.0.1", 9090);
+			
+			ClientRecive clientRecive = new ClientRecive(socket);
+			clientRecive.start();
 			
 		} catch (UnknownHostException e1) {
 			e1.printStackTrace();
@@ -102,8 +110,17 @@ public class ClientApplication extends JFrame {
 		
 		/*==========<< login panel >>==========*/
 		
-		usernameField = new JTextField();
 		JButton enterButton = new JButton("접속하기");
+		
+		usernameField = new JTextField();
+		usernameField.addKeyListener(new KeyAdapter() {
+			@Override
+			public void keyPressed(KeyEvent e) {
+				if(e.getKeyCode() == KeyEvent.VK_ENTER) {
+					enterButton.doClick();					
+				}
+			}
+		});
 		
 		usernameField.setBounds(62, 434, 308, 45);
 		loginPanel.add(usernameField);
@@ -112,12 +129,9 @@ public class ClientApplication extends JFrame {
 		enterButton.addMouseListener(new MouseAdapter() {
 			@Override
 			public void mouseClicked(MouseEvent e) {
-				try {
-					PrintWriter out = new PrintWriter(socket.getOutputStream(), true);
-					out.println();
-				} catch (IOException e1) {
-					e1.printStackTrace();
-				}
+				RequestDto<String> usernameCheckReqDto = 
+						new RequestDto<String>("usernameCheck", usernameField.getText());
+				sendRequest(usernameCheckReqDto);
 			}
 		});
 		enterButton.setBounds(62, 503, 308, 45);
@@ -167,4 +181,22 @@ public class ClientApplication extends JFrame {
 		sendButton.setBounds(375, 680, 79, 71);
 		roomPanel.add(sendButton);
 	}
+	
+	private void sendRequest(RequestDto<?> requestDto) {
+		String reqJson = gson.toJson(requestDto);
+		OutputStream outputStream = null;
+		PrintWriter printWriter = null;
+		
+		try {
+			outputStream = socket.getOutputStream();
+			printWriter = new PrintWriter(outputStream, true);
+			printWriter.println(reqJson);
+			System.out.println("클라이언트 -> 서버: " + reqJson);
+		} catch (IOException e) {
+			e.printStackTrace();
+		} 
+	}
+	
+	
+	
 }

@@ -1,11 +1,11 @@
-package dto.request;
+package dto.response;
 
 import lombok.AllArgsConstructor;
 import lombok.Data;
 
 @AllArgsConstructor
 @Data
-public class RequestDto<T> {
+public class ResponseDto<T> {
 	
 	private String resource;
 	private T body;
