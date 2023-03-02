@@ -32,6 +32,8 @@ import java.util.List;
 import java.util.Map;
 import java.awt.event.KeyAdapter;
 import java.awt.event.KeyEvent;
+import java.awt.event.WindowAdapter;
+import java.awt.event.WindowEvent;
 
 @Getter
 public class ClientApplication extends JFrame {
@@ -53,6 +55,10 @@ public class ClientApplication extends JFrame {
 	private List<Map<String, String>> roomInfoList;
 	private DefaultListModel<String> roomNameListModel;
 	private DefaultListModel<String> usernameListModel;
+	private JList roomList;
+	private JList joinUserList;
+	
+	private JTextArea chattingContent;
 	
 	public static ClientApplication getInstance() {
 		if(instance == null) {
@@ -69,19 +75,26 @@ public class ClientApplication extends JFrame {
 					frame.setVisible(true);
 				} catch (Exception e) {
 					e.printStackTrace();
-				}
+				} 
 			}
 		});
 	}
 
 	
 	private ClientApplication() {
+		addWindowListener(new WindowAdapter() {
+			@Override
+			public void windowClosing(WindowEvent e) {
+				RequestDto<String> requestDto = new RequestDto<String>("exitRoom", null);
+				sendRequest(requestDto);
+			}
+		});
 		
 		/*==========<< init >>==========*/
 		
 		gson = new Gson();
 		try {
-			socket = new Socket("127.0.0.1", 9090);
+			socket = new Socket("192.168.2.101", 9090);
 			
 			ClientRecive clientRecive = new ClientRecive(socket);
 			clientRecive.start();
@@ -168,11 +181,11 @@ public class ClientApplication extends JFrame {
 		roomListPanel.add(roomListScroll);
 		
 		roomNameListModel = new DefaultListModel<String>();
-		JList roomList = new JList(roomNameListModel);
+		roomList = new JList(roomNameListModel);
 		roomList.addMouseListener(new MouseAdapter() {
 			@Override
 			public void mouseClicked(MouseEvent e) {
-				if(e.getClickCount() == 2) {
+				if(e.getClickCount() == 2) {											// e.getClickCount() == 2 --> 더블클릭 하면 생성한 방으로 들어갈수있도록 하는 코드
 					int selectedIndex = roomList.getSelectedIndex();
 					
 					RequestDto<Map<String, String>> requestDto = 
@@ -192,6 +205,9 @@ public class ClientApplication extends JFrame {
 				
 				while(true) {
 					roomName = JOptionPane.showInputDialog(null, "생성할 방의 제목을 입력하세요.", "방생성", JOptionPane.PLAIN_MESSAGE);
+					if(roomName == null) {
+						return;
+					}
 					if(!roomName.isBlank()) {
 						break;
 					}
@@ -213,10 +229,19 @@ public class ClientApplication extends JFrame {
 		roomPanel.add(joinUserListScroll);
 		
 		usernameListModel = new DefaultListModel<String>();
-		JList joinUserList = new JList(usernameListModel);
+		joinUserList = new JList(usernameListModel);
 		joinUserListScroll.setViewportView(joinUserList);
 		
 		JButton roomExitButton = new JButton("나가기");
+		roomExitButton.addMouseListener(new MouseAdapter() {
+			@Override
+			public void mouseClicked(MouseEvent e) {
+				if(JOptionPane.showConfirmDialog(null, "정말로 방을 나가시겠습니까?", "방 나가기", JOptionPane.YES_NO_OPTION) == 0) {
+					RequestDto<String> requestDto = new RequestDto<String>("exitRoom", null);
+					sendRequest(requestDto);					
+				}
+			}
+		});
 		roomExitButton.setBounds(363, 0, 101, 90);
 		roomPanel.add(roomExitButton);
 		
@@ -224,15 +249,34 @@ public class ClientApplication extends JFrame {
 		chattingContentScroll.setBounds(0, 88, 464, 594);
 		roomPanel.add(chattingContentScroll);
 		
-		JTextArea chattingContent = new JTextArea();
+		chattingContent = new JTextArea();
 		chattingContentScroll.setViewportView(chattingContent);
+		chattingContent.setEditable(false);
 		
 		sendMessageField = new JTextField();
+		sendMessageField.addKeyListener(new KeyAdapter() {
+			@Override
+			public void keyPressed(KeyEvent e) {
+				if(e.getKeyCode() == KeyEvent.VK_ENTER) {
+					RequestDto<String> requestDto = new RequestDto<String>("sendMessage", sendMessageField.getText());
+					sendMessageField.setText("");
+					sendRequest(requestDto);
+				}
+			}
+		});
 		sendMessageField.setBounds(0, 680, 377, 81);
 		roomPanel.add(sendMessageField);
 		sendMessageField.setColumns(10);
 		
 		JButton sendButton = new JButton("전송");
+		sendButton.addMouseListener(new MouseAdapter() {
+			@Override
+			public void mouseClicked(MouseEvent e) {
+				RequestDto<String> requestDto = new RequestDto<String>("sendMessage", sendMessageField.getText());
+				sendMessageField.setText("");
+				sendRequest(requestDto);
+			}
+		});
 		sendButton.setBounds(375, 680, 89, 81);
 		roomPanel.add(sendButton);
 	}

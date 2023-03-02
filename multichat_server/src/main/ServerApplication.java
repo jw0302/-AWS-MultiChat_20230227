@@ -15,9 +15,10 @@ public class ServerApplication {
 		serverFrame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
 		serverFrame.setSize(300, 300);
 		serverFrame.setVisible(true);
+		ServerSocket serverSocket = null;
 		
 		try {
-			ServerSocket serverSocket = new ServerSocket(9090);
+			serverSocket = new ServerSocket(9090);
 			
 			while(true) {
 				Socket socket = serverSocket.accept();
@@ -26,6 +27,14 @@ public class ServerApplication {
 			}
 		} catch (IOException e) {
 			e.printStackTrace();
+		} finally {
+			if(serverSocket != null) {
+				try {
+					serverSocket.close();
+				} catch (IOException e) {
+					e.printStackTrace();
+				}
+			}
 		}
 		
 	}

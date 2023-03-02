@@ -6,6 +6,7 @@ import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.io.PrintWriter;
 import java.net.Socket;
+import java.net.SocketException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -32,32 +33,34 @@ public class ConnectedSocket extends Thread {
 	public ConnectedSocket(Socket socket) {
 		this.socket = socket;
 		gson = new Gson();
-		Room room = new Room("TestRoom" + index, "TestUser" + index);
-		index++;
-		roomList.add(room);
 	}
 	
 	
 	@Override
 	public void run() {
-		while(true) {
-			BufferedReader bufferedReader;
-			try {
+		BufferedReader bufferedReader;
+		try {
+			while(true) {
 				bufferedReader = new BufferedReader(new InputStreamReader(socket.getInputStream()));
 				String requestJson = bufferedReader.readLine();
 				
 				System.out.println("요청: " + requestJson);
 				requestMapping(requestJson);
-				
-			} catch (IOException e) {
-				e.printStackTrace();
-			} 
-		}
+			}
+		} catch (SocketException e) {
+			connectedSocketList.remove(this);
+			System.out.println(username + ": 클라이언트 종료");
+		} catch (IOException e) {
+			e.printStackTrace();
+		} 
+		
 	}
 	
 	
 	private void requestMapping(String requestJson) {
 		RequestDto<?> requestDto = gson.fromJson(requestJson, RequestDto.class);
+		
+		Room room = null;
 		
 		switch(requestDto.getResource()) {
 			case "usernameCheck" :
@@ -65,13 +68,37 @@ public class ConnectedSocket extends Thread {
 				break;
 				
 			case "createRoom" :
-				Room room = new Room((String) requestDto.getBody(), username);
+				room = new Room((String) requestDto.getBody(), username);
 				room.getUsers().add(this);
 				roomList.add(room);
-				ResponseDto<String> responseDto = new ResponseDto<String>("createRoomSuccessfully", null);
-				sendToMe(responseDto);
-				refreshUsernameList(username);
+				sendToMe(new ResponseDto<String>("createRoomSuccessfully", null));
+				refreshUsernameList(room);
 				sendToAll(refreshRoomList(), connectedSocketList);
+				break;
+				
+			case "enterRoom" :
+				room = findRoom((Map<String, String>) requestDto.getBody());
+				room.getUsers().add(this);
+				sendToMe(new ResponseDto<String>("enterRoomSuccessfully", null));
+				refreshUsernameList(room);
+				break;
+				
+			case "sendMessage" :
+				room = findConnectedRoom(username);
+				sendToAll(new ResponseDto<String>("receiveMessage", username + ">>> " + (String) requestDto.getBody()), room.getUsers());
+				break;
+				
+			case "exitRoom" :
+				room = findConnectedRoom(username);
+				try {
+					if(room.getOwner().equals(username)) {
+						exitRoomAll(room);
+					} else {
+						exitRoom(room);
+					}
+				} catch (NullPointerException e) {
+					System.out.println("클라이언트 강제 종료");
+				}
 				break;
 				
 		}
@@ -116,7 +143,6 @@ public class ConnectedSocket extends Thread {
 	
 	
 	private Room findConnectedRoom(String roomName) {
-		Room room = null;
 		for(Room r : roomList) {			
 			for(ConnectedSocket cs : r.getUsers()) {
 				if(cs.getUsername().equals(username)) {
@@ -142,8 +168,7 @@ public class ConnectedSocket extends Thread {
 	}
 	
 	
-	private void refreshUsernameList(String username) {
-		Room room = findConnectedRoom(username);
+	private void refreshUsernameList(Room room) {
 		List<String> usernameList = new ArrayList<>();
 		usernameList.add("방제목: " + room.getRoomName());							// 첫번째 줄은 방제목이 표시된다.
 		for(ConnectedSocket connectedSocket : room.getUsers()) {					// 두번째 줄부터는 방의 user들이 표시되는데 user가 owner이면 뒤에 (방장) 붙여줌
@@ -156,6 +181,20 @@ public class ConnectedSocket extends Thread {
 		ResponseDto<List<String>> responseDto = new ResponseDto<List<String>>("refreshUsernameList", usernameList);
 		sendToAll(responseDto, room.getUsers());
 		
+	}
+	
+	
+	private void exitRoomAll(Room room) {
+		sendToAll(new ResponseDto<String>("exitRoom", null), room.getUsers());
+		roomList.remove(room);
+		sendToAll(refreshRoomList(), connectedSocketList);
+	}
+	
+	
+	private void exitRoom(Room room) {
+		room.getUsers().remove(this);
+		sendToMe(new ResponseDto<String>("exitRoom", null));
+		refreshUsernameList(room);
 	}
 	
 	
